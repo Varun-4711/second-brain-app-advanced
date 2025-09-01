@@ -1,0 +1,15 @@
+version: "3.8"
+
+services:
+  mongoBrainly:
+    image: mongo:latest
+    container_name: mongoBrainly
+    restart: always
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongoBrainlyData:/data/db
+
+volumes:
+  mongoBrainlyData:
+
