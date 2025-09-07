@@ -1,4 +1,4 @@
-Frontend Repo for this project is here 👇🏼
+Frontend Repo for this project is here:  
 https://github.com/Varun-4711/second-brain-app-frontend
 
 ***
