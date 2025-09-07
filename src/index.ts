@@ -305,6 +305,22 @@ app.delete("/api/v1/content", middlewareAuth, async (req: AuthRequest, res) => {
       }
     }
 
+    // Retrieve tags linked to the content before deletion
+    const tagsToCheck = content.tags || []; // content.tags holds tag ObjectIds
+
+    // For each tag, check if it exists in any other content
+    for (const tagId of tagsToCheck) {
+      const isTagUsedElsewhere = await Content.exists({
+        _id: { $ne: contentId },
+        tags: tagId,
+      });
+
+      // If no other content references this tag, delete it
+      if (!isTagUsedElsewhere) {
+        await Tag.findByIdAndDelete(tagId);
+      }
+    }
+
     // Delete the MongoDB content document
     await Content.findByIdAndDelete(contentId);
 
@@ -374,7 +390,10 @@ app.get("/api/v1/search", middlewareAuth, async (req: AuthRequest, res) => {
  * Toggle sharing on/off for the authenticated user
  * Body: { share: boolean }
  */
-app.post("/api/v1/brain/share",middlewareAuth,async (req: AuthRequest, res) => {
+app.post(
+  "/api/v1/brain/share",
+  middlewareAuth,
+  async (req: AuthRequest, res) => {
     try {
       const userId = req.user.userId;
       const { share } = req.body;
@@ -392,8 +411,8 @@ app.post("/api/v1/brain/share",middlewareAuth,async (req: AuthRequest, res) => {
       await user.save();
 
       // Construct share link (example: frontend base url + /brain/share/<userId>)
-      const baseUrl = process.env.FRONTEND_URL || "http://localhost:3000";
-      const link = share ? `${baseUrl}/api/v1/brain/share/${user._id}` : null;
+      const baseUrl = process.env.FRONTEND_URL;
+      const link = share ? `${baseUrl}/shared-brain/${user._id}` : null;
 
       res.status(200).json({ link });
     } catch (err) {
@@ -451,7 +470,7 @@ app.get("/api/v1/brain/share/:shareLink", async (req: AuthRequest, res) => {
 //Get Tags Endpoint
 app.get("/api/v1/tags", middlewareAuth, async (req: AuthRequest, res) => {
   try {
-    const tags = await Tag.find({}).select("title").lean();
+    const tags = await Tag.find({}).lean();
     res.status(200).json(tags);
   } catch (err) {
     console.error(err);
@@ -460,31 +479,37 @@ app.get("/api/v1/tags", middlewareAuth, async (req: AuthRequest, res) => {
 });
 
 //Get content based on tags
-app.get("/api/v1/content/tag/:tagId", middlewareAuth, async (req: AuthRequest, res) => {
-  try {
-    const userId = req.user.userId;
-    const { tagId } = req.params;
+app.get(
+  "/api/v1/content/tag/:tagId",
+  middlewareAuth,
+  async (req: AuthRequest, res) => {
+    try {
+      const userId = req.user.userId;
+      const { tagId } = req.params;
 
-    // console.log("User ID:", userId);
-    // console.log("Tag ID (string):", tagId);
+      // console.log("User ID:", userId);
+      // console.log("Tag ID (string):", tagId);
 
-    if (!tagId) {
-      return res.status(400).json({ error: "Tag ID is required" });
+      if (!tagId) {
+        return res.status(400).json({ error: "Tag ID is required" });
+      }
+      const contents = await Content.find({
+        userId,
+        tags: { $in: [tagId] },
+      })
+        .populate("tags", "title")
+        .lean();
+      // console.log(`Found ${contents.length} contents with tag ${tagId}`);
+      //console.log("Sample content:", contents[0] ?? "No content found");
+      // console.log("MongoDB query filter:", JSON.stringify(contents));
+
+      res.status(200).json({ contents });
+    } catch (err) {
+      console.error("Error fetching content by tag:", err);
+      res.status(500).json({ error: "Internal Server Error" });
     }
-    const contents = await Content.find({
-      userId,
-      tags: { $in: [tagId] },
-    }).populate("tags", "title").lean();
-    // console.log(`Found ${contents.length} contents with tag ${tagId}`);
-    // console.log("Sample content:", contents[0] ?? "No content found");
-    // console.log("MongoDB query filter:", JSON.stringify(contents));
-
-    res.status(200).json({ contents });
-  } catch (err) {
-    console.error("Error fetching content by tag:", err);
-    res.status(500).json({ error: "Internal Server Error" });
   }
-});
+);
 
 //-----------------------------------------------------------------------------------------------------------------
 app.listen(port, () => {
