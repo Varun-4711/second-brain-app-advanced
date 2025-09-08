@@ -181,7 +181,7 @@ app.post("/api/v1/content", middlewareAuth, async (req: AuthRequest, res) => {
     const youtubeDescription = snippet.description;
     const thumbnailUrl = snippet.thumbnails?.default?.url || "";
     // Prepare text for embedding
-    const embeddingText: string = `${title},${youtubeTitle}`;
+    const embeddingText: string = `${title},${youtubeTitle},${youtubeDescription}`;
     // console.log("YouTube Title: ", youtubeTitle);
     // console.log("YouTube Description: ", youtubeDescription);
     // console.log("YouTube thumbnail: ", thumbnailUrl);
@@ -468,15 +468,43 @@ app.get("/api/v1/brain/share/:shareLink", async (req: AuthRequest, res) => {
 });
 
 //Get Tags Endpoint
+// app.get("/api/v1/tags", middlewareAuth, async (req: AuthRequest, res) => {
+//   try {
+//     const userId = req.user.userId;
+//     const tags = await Tag.find({}).lean();
+//     res.status(200).json(tags);
+//   } catch (err) {
+//     console.error(err);
+//     res.status(500).json({ error: "Internal Server Error" });
+//   }
+// });
+
 app.get("/api/v1/tags", middlewareAuth, async (req: AuthRequest, res) => {
   try {
-    const tags = await Tag.find({}).lean();
+    const userId = req.user.userId;
+
+    // Fetch all user content with populated tags
+    const contents = await Content.find({ userId }).populate("tags").lean();
+
+    // Collect unique tags
+    const tagMap = {};
+    contents.forEach(content => {
+      content.tags.forEach(tag => {
+        //@ts-ignore
+        tagMap[tag._id] = tag;
+      });
+    });
+
+    // Return tags as an array
+    const tags = Object.values(tagMap);
+
     res.status(200).json(tags);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
+
 
 //Get content based on tags
 app.get(
